@@ -59,9 +59,8 @@ def addTags(htags, mtags):
     str = string.replace(str, "_", " ")
     str = str.title()
     str = string.replace(str, " ", "")
-    str = string.replace(str, "/", "")
     str = string.replace(str, "%#", " #")
-    str = re.sub('\(\w*\)', '', str)
+    str = re.sub('\(*\)', '', str)
     if not len(str) <= length - len(htags) - 1:
         str = scramble(str)
         str = ' ' + ' '.join(str[:length + 1].split(' ')[0:-1])
