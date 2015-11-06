@@ -4,14 +4,15 @@ import json
 import ssl
 import re
 import urllib
-import os.path
+import os
 import string
 import random
-import re
+import sys
 from twython import Twython
 import urllib3
 from random import randint
 from random import shuffle
+import ConfigParser
 
 #Some default options selected. Please configure in BotConfig.py instead
 app_key = ""
@@ -19,7 +20,7 @@ app_secret = ""
 oauth_token = ""
 oauth_token_secret = ""
 img_dir = "/var/DanbooruTwitterPoster/Images/"
-enable_tweets = False
+enable_tweets = True
 search_tags = ""
 hashtags = ""
 blacklist_tags = ""
@@ -30,8 +31,37 @@ enable_ratingexplicit = False
 repeat_threshold = 24
 #End of default options
 
-from BotConfig import *
+#from DanBotConfig import *
 
+configdefined = False
+config = ConfigParser.ConfigParser()
+if len(sys.argv) >= 2:
+    w = 0
+    for arg in sys.argv:
+        if w > 0:
+            if ".ini" in str(sys.argv[w]):
+                config.read(str(sys.argv[w]))
+                configdefined = True
+            else:
+                print("You wrote a garbage argument!")
+        w += 1
+if configdefined == False:
+    config.read("config.ini")
+
+app_key = config.get("configuration", "app_key")
+app_secret = config.get("configuration", "app_secret")
+oauth_token = config.get("configuration", "oauth_token")
+oauth_token_secret = config.get("configuration", "oauth_token_secret")
+img_dir = config.get("configuration", "img_dir")
+enable_tweets = config.getboolean("configuration", "enable_tweets")
+repeat_threshold = config.getint("configuration", "repeat_threshold")
+search_tags = config.get("configuration", "search_tags")
+blacklist_tags = config.get("configuration", "blacklist_tags")
+hashtags = config.get("configuration", "hashtags")
+score_minimum = config.getint("configuration", "score_minimum")
+enable_ratingsafe = config.getboolean("configuration", "enable_ratingsafe")
+enable_ratingquestionable = config.getboolean("configuration", "enable_ratingquestionable")
+enable_ratingexplicit = config.getboolean("configuration", "enable_ratingexplicit")
 
 def postImage(htags, dblink, twurl, dbpf):
     print "Twitter Pic Post:\n\t" + (htags + " " + dblink)
@@ -42,6 +72,7 @@ def postImage(htags, dblink, twurl, dbpf):
         print "Tweet was posted"
     else:
         print "Tweet was pretend-posted"
+    os.remove(img_dir + dbpf)
     return 1
 
 
@@ -54,9 +85,12 @@ def scramble(sentence):
 def addTags(htags, mtags):
     # print mtags
     length = 84
-    str = mtags
+    # str = mtags
+    regex = re.compile('\(.+?\)')
+    str = regex.sub('', mtags)
     str = "%# " + string.replace(str, " ", "%# ")
     str = string.replace(str, "_", " ")
+    str = string.replace(str, "-", "")
     str = str.title()
     str = string.replace(str, " ", "")
     str = string.replace(str, "%#", " #")
@@ -69,7 +103,7 @@ def addTags(htags, mtags):
     return str
 
 
-file = open(img_dir + "submissions_log.txt", "r")
+file = open(img_dir + "submissions_log.txt", "a+")
 prevlogs = file.read()
 file.close()
 # print prevlogs
@@ -81,6 +115,8 @@ tagrequest = requests.get(
 tagdata = json.loads(tagrequest.text)
 print "The tag(s) " + search_tags + " has a total of " + str(tagdata[0]["post_count"]) + " posts"
 pagerange = tagdata[0]["post_count"] / 20
+if pagerange > 1000:
+    pagerange = 1000
 validpagetagsafe = 0
 while(validpagetagsafe == 0):
     validpagerange = 0
@@ -145,23 +181,34 @@ while(validpagetagsafe == 0):
                         validsub = 2
                         validpagerange = 0
                 else:
-                    print "Result " + str(randomsubindex) + " doesn't contain a blacklisted tag and is within rating restrictions"
+                    print "Result " + str(randomsubindex) + " doesn't contain a blacklisted tag and is within rating restrictions " + resultspage[randomsubindex]["source"] 
 
                     danboorupiclink = "http://danbooru.donmai.us" + \
                         resultspage[randomsubindex]["file_url"]
                     danboorulink = "http://danbooru.donmai.us/posts/" + \
                         str(resultspage[randomsubindex]["id"])
+                    page = requests.get(danboorulink)
+                    chopfront = (page.text).split('<li>Source: <a href="', 1)[-1]
+                    chopback = chopfront.split('">', 1)[0]
+                    # print chopback
                     danboorupic = resultspage[randomsubindex][
                         "file_url"].split('/')[-1]
                     moretags = ''
+                    
                     if not os.path.exists(img_dir + resultspage[randomsubindex]["file_url"].split('/')[-1]):
                         urllib.urlretrieve("http://danbooru.donmai.us" + resultspage[randomsubindex][
                                            "file_url"], img_dir + resultspage[randomsubindex]["file_url"].split('/')[-1])
                     tweettags = addTags(
                         hashtags, resultspage[randomsubindex]["tag_string_character"])
-                    posted = postImage(
-                        tweettags, danboorulink, danboorupiclink, danboorupic)
-
+                        
+                    if "pixiv" in chopback or "deviantart" in chopback or "twitter" in chopback or "tumblr" in chopback:
+                        posted = postImage(
+                            tweettags, chopback, danboorupiclink, danboorupic)
+                    else:
+                        print "source URL is not on the whitelist"
+                        posted = postImage(
+                            tweettags, danboorulink, danboorupiclink, danboorupic)
+                    
                     file = open(img_dir + "submissions_log.txt", "w+")
                     newlogs = str(resultspage[randomsubindex]["id"]).ljust(
                         10) + "%\n" + prevlogs
@@ -175,4 +222,7 @@ while(validpagetagsafe == 0):
                     validpagetagsafe = 1
     if validpagetagsafe == 0:
         print "No results on page " + str(randompageindex) + "was suitable to post. Querying for another page"
-        
+#this starts stat collecting
+whatismyname = twitter.verify_credentials(skip_status='1')
+print whatismyname["screen_name"]
+os.system("python /var/NicoBot/output_followers.py "+whatismyname["screen_name"])
