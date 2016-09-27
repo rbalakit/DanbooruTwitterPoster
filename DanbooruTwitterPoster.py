@@ -14,12 +14,17 @@ from random import randint
 from random import shuffle
 import ConfigParser
 
+
+universal_g = "pregnant diaper inflation panties guro scat peeing comic bikini chastity_belt trefoil undressing spread_legs pussy nipples censored cum nude sex facial vaginal cum_on_body convenient_censoring bottomless covering_breasts groin nude cameltoe panty_lift french_kiss underboob between_breasts lingerie ebola navel_cutout partially_visible_vulva ball_gag bdsm bondage gag gagged "
+
+artist_blacklist = "khee cactuskhee"
+
 #Some default options selected. Please configure in BotConfig.py instead
 app_key = ""
 app_secret = ""
 oauth_token = ""
 oauth_token_secret = ""
-img_dir = "/var/DanbooruTwitterPoster/Images/"
+img_dir = ""
 enable_tweets = True
 search_tags = ""
 hashtags = ""
@@ -29,6 +34,7 @@ enable_ratingsafe = True
 enable_ratingquestionable = False
 enable_ratingexplicit = False
 repeat_threshold = 24
+blacklist_rating = ""
 #End of default options
 
 #from DanBotConfig import *
@@ -63,6 +69,15 @@ enable_ratingsafe = config.getboolean("configuration", "enable_ratingsafe")
 enable_ratingquestionable = config.getboolean("configuration", "enable_ratingquestionable")
 enable_ratingexplicit = config.getboolean("configuration", "enable_ratingexplicit")
 
+if (enable_ratingquestionable == False and enable_ratingexplicit == False):
+    #blacklist_tags.append(universal_g)
+    uniquer = blacklist_tags + universal_g
+    print "Automatically adding safe tags"
+    uniquer = ' '.join(set(uniquer.split(' ')))
+    print uniquer
+    blacklist_tags = uniquer
+
+#Hashtag to include at the beginning of the twitter post"
 def postImage(htags, dblink, twurl, dbpf):
     print "Twitter Pic Post:\n\t" + (htags + " " + dblink)
     if enable_tweets == True:
@@ -84,7 +99,7 @@ def scramble(sentence):
 
 def addTags(htags, mtags):
     # print mtags
-    length = 84
+    length = 70
     # str = mtags
     regex = re.compile('\(.+?\)')
     str = regex.sub('', mtags)
@@ -107,9 +122,16 @@ file = open(img_dir + "submissions_log.txt", "a+")
 prevlogs = file.read()
 file.close()
 # print prevlogs
+hashtags = hashtags.decode('UTF-8')
+print hashtags
 
 twitter = Twython(app_key, app_secret, oauth_token, oauth_token_secret)
 blacklist_tags_list = blacklist_tags.split()
+#twitter.update_profile(url="picbots.moe")
+#if (enable_ratingquestionable == False and enable_ratingexplicit == False):
+#twitter.update_profile(description = "[SFW] run by @pearlgreymusic, DM pearl for complains & feedback. stats, info, & artist removal requests at http://picbots.moe")
+#else:
+#twitter.update_profile(description = "[NSFW] run by @pearlgreymusic, DM pearl for complains & feedback. stats, info, & artist removal requests at http://picbots.moe")
 tagrequest = requests.get(
     url='http://danbooru.donmai.us/tags.json?search[name]=' + search_tags)
 tagdata = json.loads(tagrequest.text)
@@ -139,6 +161,21 @@ while(validpagetagsafe == 0):
             while (validsub == 0):
                 # print "Tags are " + resultspage[randomsubindex]["tag_string_general"]
                 # print "Rating is " + resultspage[randomsubindex]["rating"]
+
+                print "Artist is " + resultspage[randomsubindex]["tag_string_artist"]
+                if any(word in resultspage[randomsubindex]["tag_string_artist"] for word in artist_blacklist):
+                    print "Result " + str(randomsubindex) + "was by a blacklisted artist"
+                    if randomsubindex < len(resultspage) - 1:
+                        randomsubindex += 1
+                    else:
+                        randomsubindex = 0
+                    iterated += 1
+                    if iterated >= len(resultspage):
+                        validsub = 2
+                        validpagerange = 0
+
+
+                resultspage[randomsubindex]["tag_string_artist"]
                 if any(word in resultspage[randomsubindex]["tag_string_general"] for word in blacklist_tags_list):
                     print "Result " + str(randomsubindex) + " contained a blacklisted tag. Choosing the next result..."
                     if randomsubindex < len(resultspage) - 1:
@@ -181,7 +218,7 @@ while(validpagetagsafe == 0):
                         validsub = 2
                         validpagerange = 0
                 else:
-                    print "Result " + str(randomsubindex) + " doesn't contain a blacklisted tag and is within rating restrictions " + resultspage[randomsubindex]["source"] 
+                    print "Result " + str(randomsubindex) + " doesn't contain a blacklisted tag and is within rating restrictions " + resultspage[randomsubindex]["source"]
 
                     danboorupiclink = "http://danbooru.donmai.us" + \
                         resultspage[randomsubindex]["file_url"]
@@ -194,13 +231,13 @@ while(validpagetagsafe == 0):
                     danboorupic = resultspage[randomsubindex][
                         "file_url"].split('/')[-1]
                     moretags = ''
-                    
+
                     if not os.path.exists(img_dir + resultspage[randomsubindex]["file_url"].split('/')[-1]):
                         urllib.urlretrieve("http://danbooru.donmai.us" + resultspage[randomsubindex][
                                            "file_url"], img_dir + resultspage[randomsubindex]["file_url"].split('/')[-1])
                     tweettags = addTags(
                         hashtags, resultspage[randomsubindex]["tag_string_character"])
-                        
+
                     if "pixiv" in chopback or "deviantart" in chopback or "twitter" in chopback or "tumblr" in chopback:
                         posted = postImage(
                             tweettags, chopback, danboorupiclink, danboorupic)
@@ -208,7 +245,7 @@ while(validpagetagsafe == 0):
                         print "source URL is not on the whitelist"
                         posted = postImage(
                             tweettags, danboorulink, danboorupiclink, danboorupic)
-                    
+
                     file = open(img_dir + "submissions_log.txt", "w+")
                     newlogs = str(resultspage[randomsubindex]["id"]).ljust(
                         10) + "%\n" + prevlogs
@@ -222,7 +259,3 @@ while(validpagetagsafe == 0):
                     validpagetagsafe = 1
     if validpagetagsafe == 0:
         print "No results on page " + str(randompageindex) + "was suitable to post. Querying for another page"
-#this starts stat collecting
-whatismyname = twitter.verify_credentials(skip_status='1')
-print whatismyname["screen_name"]
-os.system("python /var/NicoBot/output_followers.py "+whatismyname["screen_name"])
